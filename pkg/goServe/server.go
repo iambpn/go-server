@@ -94,11 +94,13 @@ func (s *server) processRequest(conn net.Conn) {
 
 	method, path, httpVersion, headers := parseHtmlRequest(requestBytes)
 
-	req := request.New(method, path, httpVersion, headers)
+	ep, err := s.matchEndpoint(method, path)
+
+	params, query := parseParamsAndQuery(path, ep.path.paramsIdx, ep.path.splitPath)
+
+	req := request.New(method, path, httpVersion, headers, params, query)
 
 	res := response.New(conn.Write)
-
-	ep, err := s.matchEndpoint(req.Method, req.Path)
 
 	if err != nil {
 		s.errorHandler(req, res, err)
@@ -139,6 +141,34 @@ func (s *server) matchEndpoint(method string, path string) (*endpoint, error) {
 	}
 
 	return nil, errors.New("Path not found")
+}
+
+func parseParamsAndQuery(pathWithQuery string, paramsIdx []int, splitPath []string) (params map[string]string, query map[string]string) {
+	params = make(map[string]string)
+	query = make(map[string]string)
+
+	splitPathWithQuery := strings.Split(pathWithQuery, "?")
+
+	pathUrl := splitPathWithQuery[0]
+	queryString := splitPathWithQuery[1]
+
+	splitPathUrl := strings.Split(pathUrl, "/")
+
+	for _, idx := range paramsIdx {
+		params[splitPath[idx]] = splitPathUrl[idx]
+	}
+
+	for _, keyVal := range strings.Split(queryString, "&") {
+		splitKeyVal := strings.Split(keyVal, "=")
+
+		if len(splitKeyVal) <= 1 {
+			continue
+		}
+
+		query[splitKeyVal[0]] = splitKeyVal[1]
+	}
+
+	return params, query
 }
 
 func parseHtmlRequest(requestBytes []byte) (method string, path string, httpVersion string, headers map[string]string) {

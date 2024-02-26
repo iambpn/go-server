@@ -104,16 +104,16 @@ func New(writer func(b []byte) (n int, err error)) *Response {
 	}
 }
 
-func (res *Response) setHeader(key string, value string) {
+func (res *Response) SetHeader(key string, value string) {
 	res.Headers[key] = value
 }
 
 func getHumanReadableStatusCode(statusCode int) string {
-	if status, ok := statusCodeToText[string(statusCode)]; ok {
+	if status, ok := statusCodeToText[fmt.Sprint(statusCode)]; ok {
 		return status
 	}
 
-	defaultCode := string(string(statusCode)[0]) + "xx"
+	defaultCode := string(fmt.Sprint(statusCode)) + "xx"
 	return statusCodeToText[defaultCode]
 }
 
@@ -129,8 +129,9 @@ func (res *Response) Send() {
 	lines = append(lines, "\n")
 
 	content := []byte(strings.Join(lines, "\n"))
+	content = append(content, res.content...)
 
-	res.writer(append(content, res.content...))
+	res.writer(content)
 }
 
 type JSONType = map[string]interface{}
@@ -144,6 +145,7 @@ func (res *Response) JSON(message JSONType) error {
 
 	res.content = data
 	res.Headers["Content-Type"] = "application/json"
+	res.Headers["Content-Length"] = fmt.Sprint(len(data))
 	return nil
 }
 
