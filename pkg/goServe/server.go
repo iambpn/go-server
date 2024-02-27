@@ -67,13 +67,16 @@ func (s *server) processRequest(conn net.Conn) {
 	// handle uncaught errors/panics
 	defer func() {
 		panickedErr := recover()
-		if panickedErr != nil {
-			if err, ok := panickedErr.(error); ok {
-				// Error
-				log.Printf("Panicked Error: %v\n", err)
-			} else {
-				log.Printf("Panicked: %v\n", panickedErr)
-			}
+
+		if panickedErr == nil {
+			return
+		}
+
+		if err, ok := panickedErr.(error); ok {
+			// Error
+			log.Printf("Panicked Error: %v\n", err)
+		} else {
+			log.Printf("Panicked: %v\n", panickedErr)
 		}
 
 		// create a response and send to user
@@ -105,7 +108,7 @@ func (s *server) processRequest(conn net.Conn) {
 				break
 			}
 
-			panic("err")
+			panic(err)
 		}
 
 		requestBytes = append(requestBytes, buffer[:readBytes]...)
@@ -273,18 +276,20 @@ func (s *server) AddPath(method string, path string, handler func(req *request.R
 	s.endpoints = append(s.endpoints, endpoint{strings.ToLower(method), parsedPath, handler})
 }
 
-type serverConfig struct {
+type ServerConfig struct {
 	ErrorHandler globalErrorHandler
 }
 
-func New(configs ...serverConfig) *server {
-	config := serverConfig{
+func New(configs ...ServerConfig) *server {
+	config := ServerConfig{
 		ErrorHandler: func(req *request.Request, res *response.Response, err error) {
-			err = res.JSON(response.JSONType{
-				"error": err.Error(),
-			})
+			log.Println("Default Error Handler: ", err)
 
 			if err != nil {
+				err = res.JSON(response.JSONType{
+					"error": err.Error(),
+				})
+			} else {
 				res.StatusCode(500)
 				res.JSON(response.JSONType{
 					"error": "Internal Server Error",
