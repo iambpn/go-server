@@ -9,7 +9,9 @@ import (
 )
 
 func main() {
-	app := goServe.New()
+	app := goServe.New(goServe.ServerConfig{
+		Worker: 512,
+	})
 
 	app.AddPath("get", "/", func(req *request.Request, res *response.Response) error {
 		err := res.JSON(response.JSONType{
@@ -38,7 +40,7 @@ func main() {
 		return nil
 	})
 
-	err := app.Listen("127.0.0.1:8080")
+	err := app.Listen("0.0.0.0:8080")
 
 	if err != nil {
 		log.Fatalln(err)

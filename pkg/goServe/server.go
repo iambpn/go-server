@@ -3,10 +3,12 @@ package goServe
 import (
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 
@@ -30,8 +32,10 @@ type endpoint struct {
 }
 
 type server struct {
-	endpoints    []endpoint
-	errorHandler globalErrorHandler
+	endpoints        []endpoint
+	errorHandler     globalErrorHandler
+	requestQueueSize int
+	workerGoroutine  int
 }
 
 /*
@@ -46,6 +50,13 @@ func (s *server) Listen(address string) error {
 
 	defer listener.Close()
 
+	reqQueue := make(chan net.Conn, s.requestQueueSize)
+
+	for i := 0; i < s.workerGoroutine; i++ {
+		// this go routine must only read data from 's' (server)
+		go workerFunc(*s, reqQueue)
+	}
+
 	fmt.Println("Listening on address: ", address)
 
 	for {
@@ -56,12 +67,19 @@ func (s *server) Listen(address string) error {
 			return err
 		}
 
-		// this go routine must oly read data from s (server)
-		go s.processRequest(conn)
+		reqQueue <- conn
 	}
 }
 
-func (s *server) processRequest(conn net.Conn) {
+func workerFunc(s server, ch chan net.Conn) {
+	for {
+		conn := <-ch
+
+		processRequest(&s, conn)
+	}
+}
+
+func processRequest(s *server, conn net.Conn) {
 	defer conn.Close()
 
 	// handle uncaught errors/panics
@@ -104,6 +122,11 @@ func (s *server) processRequest(conn net.Conn) {
 		readBytes, err := conn.Read(buffer)
 
 		if err != nil {
+			if err == io.EOF {
+				// when connection is terminated by client side
+				break
+			}
+
 			if errors.Is(err, os.ErrDeadlineExceeded) {
 				break
 			}
@@ -278,6 +301,8 @@ func (s *server) AddPath(method string, path string, handler func(req *request.R
 
 type ServerConfig struct {
 	ErrorHandler globalErrorHandler
+	QueueSize    int
+	Worker       int
 }
 
 func New(configs ...ServerConfig) *server {
@@ -298,13 +323,27 @@ func New(configs ...ServerConfig) *server {
 
 			res.Send()
 		},
+		QueueSize: 1024,
+		Worker:    runtime.NumCPU() * 10,
 	}
 
 	if len(configs) > 0 {
-		config = configs[0]
+		if configs[0].ErrorHandler != nil {
+			config.ErrorHandler = configs[0].ErrorHandler
+		}
+
+		if configs[0].QueueSize != 0 {
+			config.QueueSize = configs[0].QueueSize
+		}
+
+		if configs[0].Worker != 0 {
+			config.Worker = configs[0].Worker
+		}
 	}
 
 	return &server{
-		errorHandler: config.ErrorHandler,
+		errorHandler:     config.ErrorHandler,
+		requestQueueSize: config.QueueSize,
+		workerGoroutine:  config.Worker,
 	}
 }
