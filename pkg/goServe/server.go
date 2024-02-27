@@ -143,29 +143,29 @@ func (s *server) matchEndpoint(method string, path string) (*endpoint, error) {
 	return nil, errors.New("Path not found")
 }
 
-func parseParamsAndQuery(pathWithQuery string, paramsIdx []int, splitPath []string) (params map[string]string, query map[string]string) {
+func parseParamsAndQuery(pathWithQuery string, paramsIdx []int, originalSplitPath []string) (params map[string]string, query map[string]string) {
 	params = make(map[string]string)
 	query = make(map[string]string)
 
 	splitPathWithQuery := strings.Split(pathWithQuery, "?")
 
 	pathUrl := splitPathWithQuery[0]
-	queryString := splitPathWithQuery[1]
-
 	splitPathUrl := strings.Split(pathUrl, "/")
-
 	for _, idx := range paramsIdx {
-		params[splitPath[idx]] = splitPathUrl[idx]
+		params[originalSplitPath[idx]] = splitPathUrl[idx]
 	}
 
-	for _, keyVal := range strings.Split(queryString, "&") {
-		splitKeyVal := strings.Split(keyVal, "=")
+	if len(splitPathWithQuery) > 1 {
+		queryString := splitPathWithQuery[1]
+		for _, keyVal := range strings.Split(queryString, "&") {
+			splitKeyVal := strings.Split(keyVal, "=")
 
-		if len(splitKeyVal) <= 1 {
-			continue
+			if len(splitKeyVal) <= 1 {
+				continue
+			}
+
+			query[splitKeyVal[0]] = splitKeyVal[1]
 		}
-
-		query[splitKeyVal[0]] = splitKeyVal[1]
 	}
 
 	return params, query
