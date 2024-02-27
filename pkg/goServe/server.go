@@ -64,6 +64,29 @@ func (s *server) Listen(address string) error {
 func (s *server) processRequest(conn net.Conn) {
 	defer conn.Close()
 
+	// handle uncaught errors/panics
+	defer func() {
+		panickedErr := recover()
+		if panickedErr != nil {
+			if err, ok := panickedErr.(error); ok {
+				// Error
+				log.Printf("Panicked Error: %v\n", err)
+			} else {
+				log.Printf("Panicked: %v\n", panickedErr)
+			}
+		}
+
+		// create a response and send to user
+		res := response.New(conn.Write)
+		res.JSON(response.JSONType{
+			"error":      fmt.Errorf("%v", panickedErr).Error(),
+			"message":    "Internal Server Error",
+			"isPanicked": true,
+		})
+		res.StatusCode(500)
+		res.Send()
+	}()
+
 	buffer := make([]byte, 1024)
 	requestBytes := []byte{}
 
@@ -72,7 +95,7 @@ func (s *server) processRequest(conn net.Conn) {
 		err := conn.SetReadDeadline(time.Now().Add(time.Millisecond))
 
 		if err != nil {
-			log.Fatalln(err)
+			panic(err)
 		}
 
 		readBytes, err := conn.Read(buffer)
@@ -82,7 +105,7 @@ func (s *server) processRequest(conn net.Conn) {
 				break
 			}
 
-			log.Fatalln(err)
+			panic("err")
 		}
 
 		requestBytes = append(requestBytes, buffer[:readBytes]...)
